@@ -6,6 +6,7 @@ It has following options:
 | -o | --output-dir | dir where to put parsed data. [default `cwd`] |
 | -i | --interval | interval to check the main page in seconds [default 30] |
 | -l | --log-dir | dir for logs [default ./ycrawler.log] |
+| -d | --debug | turn on debug mode |
 
 ### Run
 You should have installed **Python 3.6** on your system.
