@@ -19,7 +19,9 @@ $ python3.6 -m venv .env
 $ . .env/bin/activate
 $ pip install -r requirements.txt
 $ python crawler.py
-[2018.09.10 22:06:22] I Start crawling from main page: https://news.ycombinator.com
+[2018.09.15 22:27:16] run: I Started downloader worker
+[2018.09.15 22:27:16] run: I Started crawling worker
+[2018.09.15 22:27:16] run: I Start crawling from main page: https://news.ycombinator.com
 ...
 ```
 ### Tests
