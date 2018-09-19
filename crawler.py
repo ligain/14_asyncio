@@ -49,7 +49,7 @@ def get_args():
     return parser.parse_args()
 
 
-async def get_url_content(session: ClientSession, url: str, retries=5, retry_timeout=2, logger=None):
+async def get_url_content(session: ClientSession, url: str, retries=20, retry_timeout=2, logger=None):
     text_content = ''
     if not logger:
         logger = logging
@@ -68,6 +68,7 @@ async def get_url_content(session: ClientSession, url: str, retries=5, retry_tim
                 text_content = (await response.read()).decode('utf-8', 'replace')
             elif response.status >= 400:
                 logger.error(f"Received {response.status} error on getting url: {url} Retrying...")
+                retries -= 1
                 await asyncio.sleep(retry_timeout)
                 continue
             response.close()
@@ -205,28 +206,40 @@ class Ycrawler:
             for comment_url in comments_urls:
                 self.loop.create_task(self.process_comment_url(comment_url, news_full_path))
 
+    async def crawl_main_page(self):
+        start = time.perf_counter()
+        self.news_tasks.clear()
+        self.log.info(f'Start crawling from main page: {self.main_url}')
+        main_page = await get_url_content(self.session, self.main_url, logger=self.log)
+        if not main_page or not main_page.get_text():
+            self.log.error(f'Can not fetch main page: {self.main_url}')
+        comments_links = main_page.select(self.news_url_selector)
+        for comment_link in comments_links:
+            if comment_link.get('href') not in self.processed_news_urls:
+                self.news_tasks.append(
+                    self.process_news_url(comment_link)
+                )
+                self.processed_news_urls.add(comment_link.get('href'))
+        if self.news_tasks:
+            await asyncio.wait(self.news_tasks, loop=self.loop)
+        end = time.perf_counter()
+        return {
+            'total_fetched_news': len(self.processed_news_urls),
+            'perf_time': end - start
+        }
+
+    def print_statistics(self, task):
+        stats = task.result()
+        self.log.info(f"Crawling is finished in: {stats.get('perf_time', 0)} seconds. "
+                      f"Total fetched news: {stats.get('total_fetched_news', 0)}")
+
     async def run(self):
         self.log.info(f'Started crawling worker')
         async with self.session:
             while True:
-                start = time.perf_counter()
-                self.news_tasks.clear()
-                self.log.info(f'Start crawling from main page: {self.main_url}')
-                main_page = await get_url_content(self.session, self.main_url, logger=self.log)
-                if not main_page or not main_page.get_text():
-                    self.log.error(f'Can not fetch main page: {self.main_url}')
-                comments_links = main_page.select(self.news_url_selector)
-                for comment_link in comments_links:
-                    if comment_link.get('href') not in self.processed_news_urls:
-                        self.news_tasks.append(
-                            self.process_news_url(comment_link)
-                        )
-                        self.processed_news_urls.add(comment_link.get('href'))
-                if self.news_tasks:
-                    await asyncio.wait(self.news_tasks, loop=self.loop)
-                end = time.perf_counter()
-                self.log.info(f'Crawling is finished in: {end - start} seconds. '
-                              f'Fetched urls: {len(self.news_tasks)}')
+                main_page_task = self.loop.create_task(self.crawl_main_page())
+                main_page_task.add_done_callback(self.print_statistics)
+
                 await asyncio.sleep(self.options.interval)
 
 
